@@ -9,8 +9,11 @@ from time import sleep
 from ctu_mitsubishi import Rv6sGripper
 
 gripper = Rv6sGripper()
+
 for _ in range(5):
     gripper.open()
     sleep(1)
     gripper.close()
     sleep(1)
+
+gripper.disconnect()

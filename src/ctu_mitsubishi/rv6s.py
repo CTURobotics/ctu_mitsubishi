@@ -48,16 +48,16 @@ class Rv6s:
     def _send_and_receive(self, msg: str) -> str:
         """Send a message to the robot and return the response."""
         if self._debug:
-            print('Sending message', msg)
+            print("Sending message", msg)
         self._connection.write(msg.encode("utf-8"))
         res = self._connection.readline().decode("utf-8")
         if self._debug:
-            print('Received message', res)
-            print('----')
+            print("Received message", res)
+            print("----")
         return res
 
     def initialize(self):
-        """ Performs robot initialization.  """
+        """Performs robot initialization."""
         if self._initialized:
             return
         res = self._send_and_receive("1;1;CNTLON\r")
@@ -100,7 +100,6 @@ class Rv6s:
     def in_limits(self, q: ArrayLike) -> bool:
         """Return whether the given joint configuration is in joint limits."""
         return np.all(q >= self.q_min) and np.all(q <= self.q_max)
-
 
     def fk(self, q: ArrayLike) -> np.ndarray:
         """Compute forward kinematics for the given joint configuration [rad].
