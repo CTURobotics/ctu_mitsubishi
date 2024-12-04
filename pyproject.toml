@@ -1,0 +1,42 @@
+[project]
+name = "ctu_mitsubishi"
+version = "0.1.0"
+description = "Package to control CTU/CIIRC robots Mitsubishi."
+authors = [
+    {name = "Vladimir Petrik", email = "vladimir.petrik@cvut.cz"},
+]
+dependencies = [
+    "pyserial>=3.5",
+    "numpy>=2.1.3",
+    "papouch @ git+http://gitlab.ciirc.cvut.cz/b635/papouch.git",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "BSD 3-Clause"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
+
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest>=7.4.3",
+    "coverage>=7.3.2",
+]
+lint = [
+    "black>=23.10.1",
+    "ruff>=0.1.3",
+]
+
+[tool.pdm.scripts]
+test = "pytest -v tests/"
+coverage = "coverage run --source src -m pytest tests/"
+post_coverage = "coverage xml"
+ruff = "ruff check src tests examples"
+black = "black --check --diff --verbose src tests examples"
+format = "black src tests examples"
+lint = { composite = ["ruff", "black"] }
