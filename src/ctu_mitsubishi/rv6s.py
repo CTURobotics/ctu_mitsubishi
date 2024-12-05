@@ -8,6 +8,8 @@ from serial import Serial, EIGHTBITS, PARITY_EVEN, STOPBITS_TWO
 import numpy as np
 from numpy.typing import ArrayLike
 
+from ctu_mitsubishi.utils import circle_circle_intersection
+
 
 class Rv6s:
 
@@ -27,8 +29,8 @@ class Rv6s:
         self.q_max = np.deg2rad([170, 135, 166, 160, 120, 360])
 
         self.dh_theta_off = np.deg2rad([0, -90, -90, 0, 0, 180])
-        self.dh_a = np.array([85, 280, 100, 0, 0, 0]) / 1000
-        self.dh_d = np.array([350, 0, 0, 315, 0, 85]) / 1000
+        self.dh_a = np.array([85, 280, 100, 0, 0, 0]) / 1000.0
+        self.dh_d = np.array([350, 0, 0, 315, 0, 85]) / 1000.0
         self.dh_alpha = np.deg2rad([-90, 0, -90, 90, -90, 0])
 
     def __del__(self):
@@ -107,29 +109,86 @@ class Rv6s:
         return np.all(q >= self.q_min) and np.all(q <= self.q_max)
 
     @staticmethod
+    def _rx(angle: float) -> np.ndarray:
+        """Return SE3 transformation that rotates around x-axis."""
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([[1, 0, 0, 0], [0, c, -s, 0], [0, s, c, 0], [0, 0, 0, 1]])
+
+    @staticmethod
+    def _ry(angle: float) -> np.ndarray:
+        """Return SE3 transformation that rotates around x-axis."""
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]])
+
+    @staticmethod
+    def _rz(angle: float) -> np.ndarray:
+        """Return SE3 transformation that rotates around z-axis."""
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([[c, -s, 0, 0], [s, c, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+
+    @staticmethod
+    def _t(tx: float = 0.0, ty: float = 0.0, tz: float = 0.0) -> np.ndarray:
+        """Return SE3 transformation that translates along x-axis."""
+        return np.array([[1, 0, 0, tx], [0, 1, 0, ty], [0, 0, 1, tz], [0, 0, 0, 1]])
+
+    @staticmethod
     def dh_to_se3(d: float, theta: float, a: float, alpha: float) -> np.ndarray:
         """Compute SE3 matrix from DH parameters."""
-        tz = np.eye(4)
-        tz[2, 3] = d
-        rz = np.eye(4)
-        rz[:2, :2] = np.array(
-            [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+        return (
+            Rv6s._t(tz=d)
+            @ Rv6s._rz(angle=theta)
+            @ Rv6s._t(tx=a)
+            @ Rv6s._rx(angle=alpha)
         )
-        tx = np.eye(4)
-        tx[0, 3] = a
-        rx = np.eye(4)
-        rx[1:3, 1:3] = np.array(
-            [[np.cos(alpha), -np.sin(alpha)], [np.sin(alpha), np.cos(alpha)]]
-        )
-        return tz @ rz @ tx @ rx
 
     def fk(self, q: ArrayLike) -> np.ndarray:
         """Compute forward kinematics for the given joint configuration [rad].
         Return pose of the end-effector in the base frame. Homogeneous transformation
-        matrix (4x4) is returned."""
+        matrix (4x4) is returned. The pose represents the flange pose w.r.t. base
+        of the robot."""
         pose = np.eye(4)
         for d, a, alpha, theta, qi in zip(
             self.dh_d, self.dh_a, self.dh_alpha, self.dh_theta_off, q
         ):
             pose = pose @ self.dh_to_se3(d, qi + theta, a, alpha)
         return pose
+
+    def _ik_5th_joint_pos(self, position: ArrayLike, q) -> list[np.ndarray]:
+        """Compute inverse kinematics for the given position of the 5th joint
+        (flange w.r.t. base) in the base frame.
+        Return list of joint configurations [rad] for the first three joints.
+        """
+        position = np.asarray(position)
+        assert position.shape == (3,), "Position must be 3D vector."
+        x, y, z = position
+
+        res = []
+        j1s = [np.atan2(y, x), np.atan2(-y, -x)]
+        for j1 in j1s:
+            pose_base_j2 = self.dh_to_se3(
+                self.dh_d[0], j1, self.dh_a[0], self.dh_alpha[0]
+            ) @ self._rz(-np.pi / 2)
+            xy_j2 = (np.linalg.inv(pose_base_j2) @ np.array([x, y, z, 1]))[:2]
+            r1 = self.dh_a[1]
+            r2 = np.linalg.norm([self.dh_d[3], self.dh_a[2]])
+            sols = circle_circle_intersection([0, 0], r1, xy_j2, r2)
+            j2s = [np.arctan2(s[1], s[0]) for s in sols]
+
+            for j2 in j2s:
+                ang = np.atan2(self.dh_a[2], self.dh_d[3])
+                pose_j2_j3 = self._rz(j2) @ self._t(tx=r1) @ self._rz(-ang)
+                xy_j3 = (
+                    np.linalg.inv(pose_j2_j3) @ np.array([xy_j2[0], xy_j2[1], 0, 1])
+                )[:2]
+                j3 = np.atan2(xy_j3[1], xy_j3[0])
+                res.append(np.array([j1, j2, j3]))
+        return res
+
+    def ik(self, pose: ArrayLike) -> list[np.ndarray]:
+        """Compute inverse kinematics for the given pose of the end-effector (flange
+        w.r.t. base) in the base frame. Homogeneous transformation matrix (4x4) is
+        expected.
+        Return list of joint configurations [rad].
+        """
+
+        return []
