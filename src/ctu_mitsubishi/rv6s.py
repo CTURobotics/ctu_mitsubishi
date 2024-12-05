@@ -153,7 +153,7 @@ class Rv6s:
             pose = pose @ self.dh_to_se3(d, qi + theta, a, alpha)
         return pose
 
-    def _ik_5th_joint_pos(self, position: ArrayLike, q) -> list[np.ndarray]:
+    def _ik_5th_joint_pos(self, position: ArrayLike) -> list[np.ndarray]:
         """Compute inverse kinematics for the given position of the 5th joint
         (flange w.r.t. base) in the base frame.
         Return list of joint configurations [rad] for the first three joints.
@@ -187,8 +187,61 @@ class Rv6s:
     def ik(self, pose: ArrayLike) -> list[np.ndarray]:
         """Compute inverse kinematics for the given pose of the end-effector (flange
         w.r.t. base) in the base frame. Homogeneous transformation matrix (4x4) is
-        expected.
+        expected. Only in limits solutions are returned.
         Return list of joint configurations [rad].
         """
+        pose = np.asarray(pose)
+        assert pose.shape == (4, 4), "Pose must be 4x4 matrix."
 
-        return []
+        t_5th_joint = (pose @ self._t(tz=-self.dh_d[-1]))[:3, 3]
+        q3s = self._ik_5th_joint_pos(t_5th_joint)
+
+        res = []
+        for q3 in q3s:
+            q = np.zeros(6)
+            q[:3] = q3
+            pose0 = self.fk(q)  # pose with last 3 joints set to zero
+            delta = pose0[:3, :3].T @ pose[:3, :3]
+            for out in self.rotation_matrix_to_euler_zyz(delta):
+                q[3:] = out
+                res.append(q.copy())
+
+                # add periodic solutions for the last joint
+                res.append(q.copy())
+                res[-1][5] += 2 * np.pi
+                res.append(q.copy())
+                res[-1][5] -= 2 * np.pi
+
+        return [s for s in res if self.in_limits(s)]
+
+    @staticmethod
+    def rotation_matrix_to_euler_zyz(R):
+        """
+        Extract Euler angles (ZYZ convention) from a rotation matrix.
+
+        Parameters:
+            R (ndarray): 3x3 rotation matrix.
+
+        Returns:
+            two solutions, 2 tuples: Euler angles (alpha, beta, gamma) in radians.
+        """
+        beta = np.arccos(R[2, 2])  # Rotation around the new Y-axis
+
+        if np.isclose(beta, 0):  # Handle gimbal lock (beta ≈ 0)
+            alpha = np.arctan2(R[1, 0], R[0, 0])
+            gamma = 0
+            return [alpha, beta, gamma]
+        elif np.isclose(beta, np.pi):  # Handle gimbal lock (beta ≈ π)
+            alpha = np.arctan2(-R[1, 0], -R[0, 0])
+            gamma = 0
+            return [alpha, beta, gamma]
+
+        alpha = np.arctan2(R[1, 2], R[0, 2])  # Rotation around Z-axis
+        gamma = np.arctan2(R[2, 1], -R[2, 0])  # Rotation around the new Z-axis
+
+        beta2 = 2 * np.pi - beta
+        beta2 = np.atan2(np.sin(beta2), np.cos(beta2))
+        alpha2 = np.arctan2(-R[1, 2], -R[0, 2])
+        gamma2 = np.arctan2(-R[2, 1], R[2, 0])
+
+        return [alpha, beta, gamma], [alpha2, beta2, gamma2]

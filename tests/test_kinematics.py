@@ -71,21 +71,22 @@ class TestKinematics(unittest.TestCase):
         for _ in range(100):
             q = np.random.uniform(r.q_min, r.q_max)
             exp_pos = fk_5th_joint_pos(q)
-            sols = r._ik_5th_joint_pos(exp_pos, q)
+            sols = r._ik_5th_joint_pos(exp_pos)
             self.assertTrue(any([np.allclose(q[:3], s, atol=1e-6) for s in sols]))
             for s in sols:
                 q[:3] = s
                 np.testing.assert_allclose(fk_5th_joint_pos(q), exp_pos, atol=1e-6)
 
-    # def test_ik(self):
-    #     np.random.seed(0)
-    #     r = CRS93(tty_dev=None)
-    #     for i in range(100):
-    #         q = np.random.uniform(r.q_min, r.q_max)
-    #         pose = r.fk(q)
-    #         sols = r.ik(pose)
-    #         for c in sols:
-    #             np.testing.assert_allclose(r.fk(c), pose, atol=1e-6)
+    def test_ik(self):
+        np.random.seed(0)
+        r = Rv6s(port=None)
+        for i in range(100):
+            q = np.random.uniform(r.q_min, r.q_max)
+            pose = r.fk(q)
+            sols = r.ik(pose)
+            self.assertTrue(any([np.allclose(q, s, atol=1e-6) for s in sols]))
+            for c in sols:
+                np.testing.assert_allclose(r.fk(c), pose, atol=1e-6)
 
 
 if __name__ == "__main__":
