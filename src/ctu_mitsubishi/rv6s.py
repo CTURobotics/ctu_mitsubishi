@@ -26,6 +26,11 @@ class Rv6s:
         self.q_min = np.deg2rad([-170, -92, -107, -160, -120, -360])
         self.q_max = np.deg2rad([170, 135, 166, 160, 120, 360])
 
+        self.dh_theta_off = np.deg2rad([0, -90, -90, 0, 0, 180])
+        self.dh_a = np.array([85, 280, 100, 0, 0, 0]) / 1000
+        self.dh_d = np.array([350, 0, 0, 315, 0, 85]) / 1000
+        self.dh_alpha = np.deg2rad([-90, 0, -90, 90, -90, 0])
+
     def __del__(self):
         """Stop robot and close the connection to the robot's control unit."""
         self.stop_robot()
@@ -101,10 +106,30 @@ class Rv6s:
         """Return whether the given joint configuration is in joint limits."""
         return np.all(q >= self.q_min) and np.all(q <= self.q_max)
 
+    @staticmethod
+    def dh_to_se3(d: float, theta: float, a: float, alpha: float) -> np.ndarray:
+        """Compute SE3 matrix from DH parameters."""
+        tz = np.eye(4)
+        tz[2, 3] = d
+        rz = np.eye(4)
+        rz[:2, :2] = np.array(
+            [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+        )
+        tx = np.eye(4)
+        tx[0, 3] = a
+        rx = np.eye(4)
+        rx[1:3, 1:3] = np.array(
+            [[np.cos(alpha), -np.sin(alpha)], [np.sin(alpha), np.cos(alpha)]]
+        )
+        return tz @ rz @ tx @ rx
+
     def fk(self, q: ArrayLike) -> np.ndarray:
         """Compute forward kinematics for the given joint configuration [rad].
         Return pose of the end-effector in the base frame. Homogeneous transformation
         matrix (4x4) is returned."""
-        pass
-
-    # fk/ik
+        pose = np.eye(4)
+        for d, a, alpha, theta, qi in zip(
+            self.dh_d, self.dh_a, self.dh_alpha, self.dh_theta_off, q
+        ):
+            pose = pose @ self.dh_to_se3(d, qi + theta, a, alpha)
+        return pose
