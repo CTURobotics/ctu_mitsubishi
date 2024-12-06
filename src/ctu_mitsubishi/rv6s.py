@@ -13,7 +13,7 @@ from ctu_mitsubishi.utils import circle_circle_intersection
 
 class Rv6s:
 
-    def __init__(self, port="/dev/ttyUSB0", baudrate=38400, debug=False):
+    def __init__(self, port="/dev/ttyUSB_Robot", baudrate=38400, debug=False):
         self._debug = debug
         self._connection = Serial(
             port,
