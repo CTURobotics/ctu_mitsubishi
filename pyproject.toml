@@ -1,6 +1,6 @@
 [project]
 name = "ctu_mitsubishi"
-version = "0.1.1"
+version = "0.1.2"
 description = "Package to control CTU/CIIRC robots Mitsubishi."
 authors = [
     {name = "Vladimir Petrik", email = "vladimir.petrik@cvut.cz"},
