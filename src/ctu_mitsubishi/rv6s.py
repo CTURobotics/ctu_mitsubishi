@@ -5,6 +5,7 @@
 #     Author: Vladimir Petrik <vladimir.petrik@cvut.cz>
 #
 from serial import Serial, EIGHTBITS, PARITY_EVEN, STOPBITS_TWO
+import time
 import numpy as np
 from numpy.typing import ArrayLike
 
@@ -32,6 +33,8 @@ class Rv6s:
         self.dh_a = np.array([85, 280, 100, 0, 0, 0]) / 1000.0
         self.dh_d = np.array([350, 0, 0, 315, 0, 85]) / 1000.0
         self.dh_alpha = np.deg2rad([-90, 0, -90, 90, -90, 0])
+
+        self._last_q = None
 
     def __del__(self):
         """Stop robot and close the connection to the robot's control unit."""
@@ -76,6 +79,8 @@ class Rv6s:
         res = self._send_and_receive("1;1;RUNMoveit;1\r")
         assert res.startswith("QoK"), f"Unexpected response while starting prog: {res}"
 
+        self.get_q()  # robot needs to read q before moving
+
         self._initialized = True
 
     def get_q(self) -> np.ndarray:
@@ -97,6 +102,7 @@ class Rv6s:
         for val in np.rad2deg(q):
             msg += f"{val:.2f},"
         msg += ")\r"
+        self._last_q = np.asarray(q).copy()
         res = self._send_and_receive(msg)
         assert res.lower().startswith("qok"), f"Unexpected response: {res}"
 
@@ -245,3 +251,23 @@ class Rv6s:
         gamma2 = np.arctan2(-R[2, 1], R[2, 0])
 
         return [alpha, beta, gamma], [alpha2, beta2, gamma2]
+
+    def wait_for_motion_stop(
+        self, timeout: float = 10, poll_interval: float = 0.1, tol: float = 0.0087
+    ) -> bool:
+        """Wait for the robot to stop moving.
+        Args:
+            timeout: Maximum time to wait for the robot to stop moving.
+            poll_interval: Time between checking the robot's state.
+            tol: Tolerance for the robot's joint positions to be considered stopped
+             [rad].
+        Returns:
+            True if the robot has stopped moving in a given time, False otherwise.
+        """
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            q = self.get_q()
+            if np.all(np.abs(q - self._last_q) < tol):
+                return True
+            time.sleep(poll_interval)
+        return False
