@@ -43,13 +43,19 @@ class Rv6s:
 
     def close_connection(self):
         """Close the connection to the robot's control unit."""
+        if self._initialized:
+            self.stop_robot()
         if hasattr(self, "_connection") and self._connection is not None:
             self._connection.close()
             self._connection = None
 
     def stop_robot(self):
         """Stop the robot and perform a safe shutdown."""
-        if self._initialized:
+        if (
+            self._initialized
+            and hasattr(self, "_connection")
+            and self._connection is not None
+        ):
             self._send_and_receive("1;1;HOTMoveit.MB4;M1=0\r")
             self._send_and_receive("1;1;STOP\r")
             self._send_and_receive("1;1;SLOTINIT\r")
