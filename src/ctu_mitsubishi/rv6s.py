@@ -76,6 +76,12 @@ class Rv6s:
         """Performs robot initialization."""
         if self._initialized:
             return
+
+        # first stop robot program if it was running before
+        # todo: make it more structured
+        self._initialized = True
+        self.stop_robot()
+
         res = self._send_and_receive("1;1;CNTLON\r")
         assert res.startswith("QoK"), f"Unexpected response while strating: {res}"
 
