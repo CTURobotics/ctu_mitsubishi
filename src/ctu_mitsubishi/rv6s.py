@@ -5,6 +5,7 @@
 #     Author: Vladimir Petrik <vladimir.petrik@cvut.cz>
 #
 from serial import Serial, EIGHTBITS, PARITY_EVEN, STOPBITS_TWO
+import time
 import numpy as np
 from numpy.typing import ArrayLike
 
@@ -33,6 +34,8 @@ class Rv6s:
         self.dh_d = np.array([350, 0, 0, 315, 0, 85]) / 1000.0
         self.dh_alpha = np.deg2rad([-90, 0, -90, 90, -90, 0])
 
+        self._last_q = None
+
     def __del__(self):
         """Stop robot and close the connection to the robot's control unit."""
         self.stop_robot()
@@ -40,13 +43,19 @@ class Rv6s:
 
     def close_connection(self):
         """Close the connection to the robot's control unit."""
+        if self._initialized:
+            self.stop_robot()
         if hasattr(self, "_connection") and self._connection is not None:
             self._connection.close()
             self._connection = None
 
     def stop_robot(self):
         """Stop the robot and perform a safe shutdown."""
-        if self._initialized:
+        if (
+            self._initialized
+            and hasattr(self, "_connection")
+            and self._connection is not None
+        ):
             self._send_and_receive("1;1;HOTMoveit.MB4;M1=0\r")
             self._send_and_receive("1;1;STOP\r")
             self._send_and_receive("1;1;SLOTINIT\r")
@@ -67,6 +76,12 @@ class Rv6s:
         """Performs robot initialization."""
         if self._initialized:
             return
+
+        # first stop robot program if it was running before
+        # todo: make it more structured
+        self._initialized = True
+        self.stop_robot()
+
         res = self._send_and_receive("1;1;CNTLON\r")
         assert res.startswith("QoK"), f"Unexpected response while strating: {res}"
 
@@ -75,6 +90,8 @@ class Rv6s:
 
         res = self._send_and_receive("1;1;RUNMoveit;1\r")
         assert res.startswith("QoK"), f"Unexpected response while starting prog: {res}"
+
+        self.get_q()  # robot needs to read q before moving
 
         self._initialized = True
 
@@ -97,6 +114,7 @@ class Rv6s:
         for val in np.rad2deg(q):
             msg += f"{val:.2f},"
         msg += ")\r"
+        self._last_q = np.asarray(q).copy()
         res = self._send_and_receive(msg)
         assert res.lower().startswith("qok"), f"Unexpected response: {res}"
 
@@ -245,3 +263,23 @@ class Rv6s:
         gamma2 = np.arctan2(-R[2, 1], R[2, 0])
 
         return [alpha, beta, gamma], [alpha2, beta2, gamma2]
+
+    def wait_for_motion_stop(
+        self, timeout: float = 10, poll_interval: float = 0.1, tol: float = 0.0087
+    ) -> bool:
+        """Wait for the robot to stop moving.
+        Args:
+            timeout: Maximum time to wait for the robot to stop moving.
+            poll_interval: Time between checking the robot's state.
+            tol: Tolerance for the robot's joint positions to be considered stopped
+             [rad].
+        Returns:
+            True if the robot has stopped moving in a given time, False otherwise.
+        """
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            q = self.get_q()
+            if np.all(np.abs(q - self._last_q) < tol):
+                return True
+            time.sleep(poll_interval)
+        return False
