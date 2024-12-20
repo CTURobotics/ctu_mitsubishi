@@ -91,9 +91,8 @@ class Rv6s:
         res = self._send_and_receive("1;1;RUNMoveit;1\r")
         assert res.startswith("QoK"), f"Unexpected response while starting prog: {res}"
 
-        self.get_q()  # robot needs to read q before moving
-
         self._initialized = True
+        self.get_q()  # robot needs to read q before moving
 
     def get_q(self) -> np.ndarray:
         """Get current joint configuration [rad]."""
