@@ -12,7 +12,6 @@ from ctu_mitsubishi.utils import circle_circle_intersection
 
 
 class TestKinematics(unittest.TestCase):
-
     def test_fk0(self):
         q = np.deg2rad([0, 0, 90, 0, 0, 0])
         r = Rv6s(port=None)
