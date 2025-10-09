@@ -5,11 +5,27 @@
 #     Author: Vladimir Petrik <vladimir.petrik@cvut.cz>
 #
 
-from papouch import Quido
+try:
+    from papouch import Quido
+except ImportError:
+
+    class Quido:
+        """A fake Quido class that allows running tests without the papouch library."""
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def connect_usb(self, dev):
+            pass
+
+        def set_output(self, channel, state, duration=None):
+            pass
+
+        def __del__(self):
+            pass
 
 
 class Rv6sGripper:
-
     def __init__(self, dev="/dev/ttyUSB_Quido"):
         self._quido = Quido()
         self._quido.connect_usb(dev)

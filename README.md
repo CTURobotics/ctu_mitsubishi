@@ -25,3 +25,13 @@ robot.close_connection()
 ```
 
 See more examples in the `examples` folder.
+
+
+## For developers
+```
+git clone git@github.com:CTURobotics/ctu_mitsubishi.git
+cd ctu_mitsubishi
+uv sync
+uv pip install -e ".[dev]"
+pre-commit install
+```
