@@ -9,6 +9,7 @@ import time
 import numpy as np
 from numpy.typing import ArrayLike
 
+from ctu_mitsubishi.basler_camera import BaslerCamera
 from ctu_mitsubishi.utils import circle_circle_intersection
 
 
@@ -34,11 +35,20 @@ class Rv6s:
         self.dh_alpha = np.deg2rad([-90, 0, -90, 90, -90, 0])
 
         self._last_q = None
+        self._camera: BaslerCamera | None = None
 
     def __del__(self):
         """Stop robot and close the connection to the robot's control unit."""
         self.stop_robot()
         self.close_connection()
+
+    def grab_image(self, timeout=10000):
+        if self._camera is None:
+            self._camera = BaslerCamera()
+            self._camera.connect_by_name("camera-rv6s")
+            self._camera.open()
+            self._camera.set_parameters()
+        return self._camera.grab_image(timeout)
 
     def close_connection(self):
         """Close the connection to the robot's control unit."""
