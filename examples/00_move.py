@@ -14,9 +14,11 @@ q = robot.get_q()
 for i in range(6):
     q[i] += np.deg2rad(10)
     robot.move_to_q(q)
+    robot.wait_for_motion_stop()
     print(f"Moved to {np.rad2deg(q).round()} degrees")
     q[i] += np.deg2rad(-10)
     robot.move_to_q(q)
+    robot.wait_for_motion_stop()
     print(f"Moved to {np.rad2deg(q).round()} degrees")
 
 robot.stop_robot()

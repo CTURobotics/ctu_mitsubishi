@@ -12,8 +12,8 @@ gripper = Rv6sGripper()
 
 for _ in range(5):
     gripper.open()
-    sleep(1)
+    sleep(1.5)
     gripper.close()
-    sleep(1)
+    sleep(1.5)
 
 gripper.disconnect()
