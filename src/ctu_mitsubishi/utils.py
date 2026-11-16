@@ -9,16 +9,19 @@ from numpy.typing import ArrayLike
 
 
 def circle_circle_intersection(
-    c0: ArrayLike, r0: float, c1: ArrayLike, r1: float
+    c0: ArrayLike, r0: float, c1: ArrayLike, r1: float, tol: float = 1e-9
 ) -> list[np.ndarray]:
     """Computes intersection of the circles defined by center c_i and radius r_i.
     Returns empty array if there is no solution, two solutions otherwise. If there
     are infinite number of solutions, select two (almost) randomly.
+    Tangent circles (touching in a single point) return that point twice. The
+    tolerance `tol` absorbs floating point error around the tangent configurations.
     """
     c0 = np.asarray(c0)
     c1 = np.asarray(c1)
     d = np.linalg.norm(c1 - c0)
-    if r0 + r1 < d < np.abs(r0 - r1) or d > r0 + r1:
+    # circles apart or one inside the other; tol keeps (nearly) tangent circles
+    if d > r0 + r1 + tol or d < np.abs(r0 - r1) - tol:
         return []
 
     if np.isclose(d, 0) and np.isclose(r0, r1):
@@ -26,10 +29,12 @@ def circle_circle_intersection(
             c0 + [r0 * np.cos(a), r0 * np.sin(a)]
             for a in np.random.uniform(-np.pi, np.pi, 2)
         ]
-    a = (r0**2 - r1**2 + d**2) / (2 * d)
-    assert r0**2 - a**2 >= 0, "Invalid circle_circle_intersection"
-
-    h = np.sqrt(r0**2 - a**2)
+    a = (r0**2 - r1**2 + d**2) / (2 * d)  # distance from c0 to the radical line
+    # Squared half-chord r0**2 - a**2 in factored form. It is non-negative exactly
+    # when the guard above passes; rounding may still push it slightly below zero
+    # at tangency, hence the clamp.
+    h2 = ((r0 + r1) ** 2 - d**2) * (d**2 - (r0 - r1) ** 2) / (4 * d**2)
+    h = np.sqrt(max(h2, 0.0))
     x0, y0 = c0
     x1, y1 = c1
     x2 = x0 + a * (x1 - x0) / d
